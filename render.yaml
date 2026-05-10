@@ -2,10 +2,18 @@ services:
   - type: web
     name: shl-assessment-recommender
     runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
     envVars:
-      - key: ANTHROPIC_API_KEY
-        sync: false   # set manually in Render dashboard
+      - key: PYTHON_VERSION
+        value: 3.11.9
+
+      - key: GEMINI_API_KEY
+        sync: false
+
+    buildCommand: pip install -r requirements.txt
+
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
     healthCheckPath: /health
+
     autoDeploy: true
