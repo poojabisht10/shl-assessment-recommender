@@ -36,7 +36,7 @@ log.info(f"Index ready — {len(CATALOG)} items")
 
 # ── gemini client ───────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL   = "gemini-1.5-flash"
+GEMINI_MODEL   = "gemini-2.0-flash"
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
 app = FastAPI(title="SHL Assessment Recommender", version="1.0.0")
