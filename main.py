@@ -34,9 +34,11 @@ log.info("Building catalog search index ...")
 _engine = CatalogSearchEngine(CATALOG)
 log.info(f"Index ready — {len(CATALOG)} items")
 
-# ── gemini client ───────────────────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL   = "gemini-2.0-flash"
+# ── groq client ───────────────────────────────────────────────────────────
+# ADD this:
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL   = "llama-3.3-70b-versatile"
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
 app = FastAPI(title="SHL Assessment Recommender", version="1.0.0")
@@ -358,26 +360,31 @@ def chat(req: ChatRequest):
     
     else:
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel(
-                model_name=GEMINI_MODEL,
-                system_instruction=system,
-            )
-            # Convert messages to Gemini format
-            history = []
-            for msg in claude_messages[:-1]:
-                role = "user" if msg["role"] == "user" else "model"
-                history.append({"role": role, "parts": [msg["content"]]})
-            
-            chat = model.start_chat(history=history)
-            last_msg = claude_messages[-1]["content"]
-            gemini_resp = chat.send_message(last_msg)
-            raw_text = gemini_resp.text
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+            }
+            # Groq uses OpenAI format
+            groq_messages = [{"role": "system", "content": system}] + claude_messages
+            payload = {
+                "model": GROQ_MODEL,
+                "messages": groq_messages,
+                "max_tokens": 1024,
+                "temperature": 0.3,
+            }
+            with httpx.Client(timeout=28.0) as http:
+                resp = http.post(GROQ_API_URL, headers=headers, json=payload)
 
-        except Exception as e:
-            log.error(f"Gemini API error: {e}")
-            raise HTTPException(status_code=502, detail=f"LLM API error: {str(e)}")
+            if resp.status_code != 200:
+                log.error(f"Groq API error {resp.status_code}: {resp.text[:300]}")
+                raise HTTPException(status_code=502, detail=f"LLM API error: {resp.status_code}")
+
+            data = resp.json()
+            raw_text = data["choices"][0]["message"]["content"]
+
+        except httpx.TimeoutException:
+            log.error("Groq API call timed out")
+            raise HTTPException(status_code=504, detail="LLM API timeout")
 
     # ── Parse output ──────────────────────────────────────────────────────────
     reply, raw_recs, eoc = parse_agent_output(raw_text)
